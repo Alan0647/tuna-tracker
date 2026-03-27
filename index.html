@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>全球鮪魚產季監測系統</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map { height: 600px; width: 100%; background: #001529; }
+        .controls { padding: 20px; font-family: sans-serif; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h2>全球鮪魚活躍漁場預估 (2026 決策版)</h2>
+        <label>選擇月份: <span id="monthDisplay">3</span>月</label>
+        <input type="range" id="monthSlider" min="1" max="12" value="3" style="width:300px">
+    </div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="data.js"></script>
+    <script>
+        // 初始化地圖
+        const map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        let activeLayers = [];
+
+        function updateMap(month) {
+            // 清除現有圖層
+            activeLayers.forEach(layer => map.removeLayer(layer));
+            activeLayers = [];
+
+            tunaData.forEach(fish => {
+                if (fish.months.includes(parseInt(month))) {
+                    const rect = L.rectangle(fish.bounds, {
+                        color: fish.color, weight: 1, fillOpacity: 0.4
+                    }).addTo(map).bindPopup(`<b>${fish.name}</b><br>${fish.info}`);
+                    activeLayers.push(rect);
+                }
+            });
+        }
+
+        document.getElementById('monthSlider').addEventListener('input', (e) => {
+            document.getElementById('monthDisplay').innerText = e.target.value;
+            updateMap(e.target.value);
+        });
+
+        updateMap(3); // 初始顯示3月
+    </script>
+</body>
+</html>
