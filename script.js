@@ -1,11 +1,10 @@
-// script.js - 2026 校正版
-const map = L.map('map', { center: [15, 150], zoom: 2.5, zoomControl: false });
+// script.js - 2026 最終校正版
+const map = L.map('map', { center: [10, 160], zoom: 2.5, zoomControl: false });
 
-// 使用暗色地圖底圖
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-let fisheryLayers = {};
+let activeFisheryLayers = {};
 
 // 衛星圖層定義
 const satLayers = {
@@ -17,51 +16,47 @@ const satLayers = {
     })
 };
 
-// 初始化選單切換器
 function initUI() {
     const container = document.getElementById('speciesToggles');
-    container.innerHTML = ''; // 清空載入中文字樣
+    container.innerHTML = ''; 
 
     Object.keys(tunaData).forEach((name, index) => {
         const div = document.createElement('div');
         div.className = "form-check mb-2";
-        // 預設選中第一個魚種
-        const checked = index === 0 ? 'checked' : '';
+        // 預設開啟太平洋黑鮪與黃鰭鮪中西太平洋
+        const checked = (name.includes("黑鮪") || name.includes("中西太平洋")) ? 'checked' : '';
         div.innerHTML = `
             <input class="form-check-input sp-toggle" type="checkbox" value="${name}" id="sp_${index}" ${checked}>
-            <label class="form-check-label small" for="sp_${index}">
+            <label class="form-check-label" for="sp_${index}">
                 <span class="legend-dot" style="background:${tunaData[name].color}"></span>${name}
             </label>
         `;
         container.appendChild(div);
     });
-    updateMap(); // 立即執行一次渲染
+    updateMap(); 
 }
 
-// 渲染漁場範圍
 function updateMap() {
     const month = parseInt(document.getElementById('monthSlider').value);
     
-    // 清除舊圖層
-    Object.values(fisheryLayers).forEach(layer => map.removeLayer(layer));
-    fisheryLayers = {};
+    // 清除現有漁場圖層
+    Object.values(activeFisheryLayers).forEach(layer => map.removeLayer(layer));
+    activeFisheryLayers = {};
 
     document.querySelectorAll('.sp-toggle:checked').forEach(input => {
         const name = input.value;
         const fish = tunaData[name];
         
-        // 如果該月份在活躍季節內
         if (fish.months.includes(month)) {
             const layer = L.rectangle(fish.bounds, {
-                color: fish.color, weight: 1, fillOpacity: 0.35, dashArray: '5, 5'
+                color: fish.color, weight: 1, fillOpacity: 0.3, dashArray: '4, 4'
             }).bindPopup(`<b>${name}</b><br>活躍月份：${fish.months.join(', ')}月<br>${fish.info}`);
             layer.addTo(map);
-            fisheryLayers[name] = layer;
+            activeFisheryLayers[name] = layer;
         }
     });
 }
 
-// 事件綁定
 document.getElementById('monthSlider').addEventListener('input', (e) => {
     document.getElementById('monthVal').innerText = e.target.value;
     updateMap();
@@ -73,5 +68,4 @@ document.addEventListener('change', (e) => {
     if (e.target.id === 'chlWms') e.target.checked ? satLayers.chl.addTo(map) : map.removeLayer(satLayers.chl);
 });
 
-// 啟動系統
 window.onload = initUI;
