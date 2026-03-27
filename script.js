@@ -1,12 +1,11 @@
-// script.js - 2026 最終校正版
-const map = L.map('map', { center: [10, 160], zoom: 2.5, zoomControl: false });
+// script.js - 3.3 多重熱點渲染版
+const map = L.map('map', { center: [15, 30], zoom: 2.5, zoomControl: false });
 
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-let activeFisheryLayers = {};
+let activeLayers = [];
 
-// 衛星圖層定義
 const satLayers = {
     sst: L.tileLayer.wms('https://nowcoast.noaa.gov/arcgis/services/nowcoast/analysis_ocean_sfc_sst_time/MapServer/WMSServer', {
         layers: '1', format: 'image/png', transparent: true, opacity: 0.5
@@ -23,11 +22,11 @@ function initUI() {
     Object.keys(tunaData).forEach((name, index) => {
         const div = document.createElement('div');
         div.className = "form-check mb-2";
-        // 預設開啟太平洋黑鮪與黃鰭鮪中西太平洋
-        const checked = (name.includes("黑鮪") || name.includes("中西太平洋")) ? 'checked' : '';
+        // 預設開啟黑鮪與印度洋熱點
+        const checked = (name.includes("黑鮪") || name.includes("印度洋")) ? 'checked' : '';
         div.innerHTML = `
             <input class="form-check-input sp-toggle" type="checkbox" value="${name}" id="sp_${index}" ${checked}>
-            <label class="form-check-label" for="sp_${index}">
+            <label class="form-check-label small" for="sp_${index}">
                 <span class="legend-dot" style="background:${tunaData[name].color}"></span>${name}
             </label>
         `;
@@ -40,19 +39,22 @@ function updateMap() {
     const month = parseInt(document.getElementById('monthSlider').value);
     
     // 清除現有漁場圖層
-    Object.values(activeFisheryLayers).forEach(layer => map.removeLayer(layer));
-    activeFisheryLayers = {};
+    activeLayers.forEach(layer => map.removeLayer(layer));
+    activeLayers = [];
 
     document.querySelectorAll('.sp-toggle:checked').forEach(input => {
         const name = input.value;
         const fish = tunaData[name];
         
         if (fish.months.includes(month)) {
-            const layer = L.rectangle(fish.bounds, {
-                color: fish.color, weight: 1, fillOpacity: 0.3, dashArray: '4, 4'
-            }).bindPopup(`<b>${name}</b><br>活躍月份：${fish.months.join(', ')}月<br>${fish.info}`);
-            layer.addTo(map);
-            activeFisheryLayers[name] = layer;
+            // 處理同一魚種的多個細緻矩形 [cite: 32]
+            fish.rects.forEach(bounds => {
+                const layer = L.rectangle(bounds, {
+                    color: fish.color, weight: 1.5, fillOpacity: 0.4, dashArray: '3, 6'
+                }).bindPopup(`<b>${name}</b><br>${fish.info}`);
+                layer.addTo(map);
+                activeLayers.push(layer);
+            });
         }
     });
 }
