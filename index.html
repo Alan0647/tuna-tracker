@@ -2,55 +2,158 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>海洋前哨 3.3 | 精準漁情監測</title>
+    <title>Project Oceanic Sentinel - 戰情監控系統 v2.0</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        :root { --dark-bg: #0b0e14; --panel-bg: #161b22; --text: #c9d1d9; }
-        body { background: var(--dark-bg); color: var(--text); font-family: sans-serif; margin: 0; overflow: hidden; }
-        #map { height: 100vh; width: 100%; z-index: 1; }
-        .dashboard-panel { position: absolute; top: 15px; left: 15px; z-index: 1000; width: 340px; 
-                          background: var(--panel-bg); border: 1px solid #30363d; border-radius: 12px; 
-                          padding: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); max-height: 90vh; overflow-y: auto; }
-        .layer-card { background: #0d1117; border-radius: 8px; padding: 12px; margin-top: 12px; border: 1px solid #21262d; }
-        .legend-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-        h6 { font-size: 0.75rem; letter-spacing: 1px; color: #8b949e !important; text-transform: uppercase; margin-bottom: 10px; }
-        .small-info { font-size: 0.75rem; color: #6e7681; }
+        body, html { margin: 0; padding: 0; height: 100%; background: #000b1a; font-family: "Microsoft JhengHei", sans-serif; }
+        #map { height: 100vh; width: 100%; }
+
+        /* --- 核心 UI 樣式 --- */
+        .dashboard-overlay {
+            position: absolute; top: 20px; left: 20px; z-index: 1000;
+            background: rgba(0, 20, 40, 0.85); color: #00ffff;
+            padding: 15px; border-radius: 8px; border: 1px solid #005577;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+        }
+        .status-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; background: #003344; margin-top: 5px; }
+
+        /* --- 精密亮點 (Precise Glow Markers) --- */
+        /* 1. 核心艦隊：昱友/信隆 (青色) */
+        .vessel-marker {
+            width: 8px; height: 8px; background-color: #00ffff;
+            border-radius: 50%; box-shadow: 0 0 10px #00ffff, 0 0 15px rgba(0, 255, 255, 0.6);
+            animation: pulse-vessel 2s infinite;
+        }
+        
+        /* 2. 警示/重點船隻 (紅色 - 可視需求切換) */
+        .vessel-marker-alert {
+            width: 8px; height: 8px; background-color: #ff3300;
+            border-radius: 50%; box-shadow: 0 0 10px #ff3300, 0 0 15px rgba(255, 51, 0, 0.6);
+            animation: pulse-alert 1.5s infinite;
+        }
+
+        /* 3. 劍旗魚/魚場潛力點 (螢光綠) */
+        .fishing-ground-marker {
+            width: 5px; height: 5px; background-color: #39ff14;
+            border-radius: 50%; box-shadow: 0 0 8px #39ff14;
+            opacity: 0.9;
+        }
+
+        @keyframes pulse-vessel {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.4); opacity: 0.6; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes pulse-alert {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.6); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* 讓衛星圖層更具科技感 (濾鏡) */
+        .leaflet-tile-pane { filter: brightness(0.8) contrast(1.2); }
     </style>
 </head>
 <body>
 
-    <div class="dashboard-panel">
-        <h5 class="text-white border-bottom pb-2 mb-3">Oceanic Sentinel 3.3</h5>
-        
-        <div class="mb-4">
-            <label class="form-label small">預估月份：<span id="monthVal" class="text-info fw-bold">7</span>月</label>
-            <input type="range" class="form-range" id="monthSlider" min="1" max="12" value="7">
+    <div class="dashboard-overlay">
+        <h2 style="margin:0; font-size: 18px;">Oceanic Sentinel</h2>
+        <div class="status-tag">系統狀態: 數據即時同步中 (2026-03-27)</div>
+        <hr style="border: 0.5px solid #005577; margin: 10px 0;">
+        <div id="vessel-list" style="font-size: 13px;">
+            <div>🛳️ 昱友 668: <span style="color:#00ffff">作業中</span></div>
+            <div>🛳️ 信隆 168: <span style="color:#00ffff">巡航中</span></div>
+            <div>🐟 劍旗魚預測: <span style="color:#39ff14">顯現</span></div>
         </div>
-
-        <div class="layer-card">
-            <h6>科學網格熱點 (依報告校正)</h6>
-            <div id="speciesToggles"></div>
-        </div>
-
-        <div class="layer-card border-primary">
-            <h6 class="text-primary">即時衛星數據 (Open Data)</h6>
-            <div class="form-check form-switch small mb-2">
-                <input class="form-check-input" type="checkbox" id="sstWms">
-                <label class="form-check-label">海表溫度 (NOAA SST)</label>
-            </div>
-            <div class="form-check form-switch small">
-                <input class="form-check-input" type="checkbox" id="chlWms">
-                <label class="form-check-label">葉綠素濃度 (NASA GIBS)</label>
-            </div>
-        </div>
-        <div class="mt-3 small-info text-center">數據來源：Global Tuna Atlas / SEAPODYM [cite: 9, 15]</div>
     </div>
 
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="data.js"></script>
-    <script src="script.js"></script>
+    <script>
+        // --- 1. 初始化地圖 (以太平洋/印度洋交界作業區為中心) ---
+        const map = L.map('map', {
+            center: [-25.0, 45.0], 
+            zoom: 5,
+            zoomControl: false
+        });
+
+        // 設置深色底圖
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; CartoDB'
+        }).addTo(map);
+
+        // --- 2. 衛星圖層介接 (Copernicus Marine WMS) ---
+        // 注意：實務上 WMS 需要帳號密碼，此處為結構範例，需替換為你的驗證 URL
+        const cmemsUrl = "https://nrt.cmems-du.eu/thredds/wms/global-analysis-forecast-phy-001-024";
+
+        const sstLayer = L.tileLayer.wms(cmemsUrl, {
+            layers: 'thetao', // 海表溫度
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.5,
+            styles: 'boxfill/rainbow',
+            zIndex: 10
+        });
+
+        const chlLayer = L.tileLayer.wms("https://nrt.cmems-du.eu/thredds/wms/global-analysis-forecast-bio-001-028", {
+            layers: 'chl', // 葉綠素濃度
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.4,
+            styles: 'boxfill/alg2',
+            zIndex: 11
+        });
+
+        // 預設開啟 SST
+        sstLayer.addTo(map);
+
+        // --- 3. 數據與精密亮點渲染邏輯 ---
+        
+        // 模擬當前位置數據 (實際使用時透過 API 更新此 Array)
+        const sentinelData = [
+            { name: "昱友 668", type: "vessel", lat: -24.52, lng: 46.12, status: "Alert" },
+            { name: "信隆 168", type: "vessel", lat: -26.15, lng: 44.80, status: "Normal" },
+            { name: "NF YUYO 1", type: "vessel", lat: -23.80, lng: 48.20, status: "Normal" },
+            { name: "劍旗魚密集區 A", type: "ground", lat: -25.20, lng: 45.50 },
+            { name: "劍旗魚密集區 B", type: "ground", lat: -25.80, lng: 46.30 }
+        ];
+
+        // 建立專屬層級確保亮點在最上方
+        map.createPane('preciseMarkers');
+        map.getPane('preciseMarkers').style.zIndex = 650;
+
+        sentinelData.forEach(item => {
+            let markerClass = "";
+            
+            if (item.type === "vessel") {
+                // 如果狀態為 Alert (例如靠近公海邊界)，使用紅色
+                markerClass = item.status === "Alert" ? "vessel-marker-alert" : "vessel-marker";
+            } else {
+                markerClass = "fishing-ground-marker";
+            }
+
+            const customIcon = L.divIcon({
+                className: markerClass,
+                iconSize: [10, 10],
+                iconAnchor: [5, 5]
+            });
+
+            L.marker([item.lat, item.lng], { 
+                icon: customIcon,
+                pane: 'preciseMarkers'
+            })
+            .bindPopup(`<b>${item.name}</b><br>緯度: ${item.lat}<br>經度: ${item.lng}`)
+            .addTo(map);
+        });
+
+        // --- 4. 圖層控制切換 ---
+        const overlayMaps = {
+            "海表溫度 (SST)": sstLayer,
+            "葉綠素濃度 (CHL)": chlLayer
+        };
+        L.control.layers(null, overlayMaps, { collapsed: false, position: 'bottomleft' }).addTo(map);
+
+    </script>
 </body>
 </html>
